@@ -59,7 +59,7 @@ uint64 sys_task_info(struct TaskInfo *info)
 	info->status = 2;  // status is RUNNING (proc has to run to make this syscall)
 
 	//copying syscall counts
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < MAX_SYSCALL_NUM; i++) {
 		info->syscall_times[i] = p->syscall_count[i];
 	}
 	// getting time in ms 
