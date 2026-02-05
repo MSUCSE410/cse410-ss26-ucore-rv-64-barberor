@@ -41,11 +41,20 @@ struct proc {
 	/*
 	* LAB1: you may need to add some new fields here
 	*/
+	uint64 syscall_count[100]; 
+	uint64 start_time;
 };
 
 /*
 * LAB1: you may need to define struct for TaskInfo here
 */
+struct TaskInfo {
+    TaskStatus status; // process status
+	// how many syscalls?
+    unsigned int syscall_times[100];
+	// how long has this task been running?
+    int time;
+};
 
 struct proc *curr_proc();
 void exit(int);
