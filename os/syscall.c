@@ -4,6 +4,7 @@
 #include "syscall_ids.h"
 #include "timer.h"
 #include "trap.h"
+#include "proc.h"
 
 uint64 sys_write(int fd, uint64 va, uint len)
 {
@@ -32,17 +33,18 @@ uint64 sys_sched_yield()
 	return 0;
 }
 
-uint64 sys_gettimeofday(TimeVal *val, int _tz) // TODO: implement sys_gettimeofday in pagetable. (VA to PA)
+uint64 sys_gettimeofday(uint64 val_virtual, int _tz) // TODO: implement sys_gettimeofday in pagetable. (VA to PA)
 {
-	// YOUR CODE
-	val->sec = 0;
-	val->usec = 0;
-
+	struct proc *p = curr_proc();
+	TimeVal val;
 	/* The code in `ch3` will leads to memory bugs*/
 
-	// uint64 cycle = get_cycle();
-	// val->sec = cycle / CPU_FREQ;
-	// val->usec = (cycle % CPU_FREQ) * 1000000 / CPU_FREQ;
+	uint64 cycle = get_cycle();
+	val.sec = cycle / CPU_FREQ;
+	val.usec = (cycle % CPU_FREQ) * 1000000 / CPU_FREQ;
+	if (copyout(p->pagetable, val_virtual, (char *)&val, sizeof(TimeVal)) < 0) {
+		return -1;
+	}
 	return 0;
 }
 
@@ -52,20 +54,47 @@ uint64 sys_gettimeofday(TimeVal *val, int _tz) // TODO: implement sys_gettimeofd
 /*
 * LAB1: you may need to define sys_task_info here
 */
-uint64 sys_task_info(struct TaskInfo *info)
+uint64 sys_task_info(uint64 user_info_virtual)
 {
+
 	struct proc *p = curr_proc();
 	
-	info->status = 2;  // status is RUNNING (proc has to run to make this syscall)
+	struct TaskInfo kernelInfo;
+	memset(&kernelInfo, 0, sizeof(struct TaskInfo));
+	kernelInfo.status = Running;
 
 	//copying syscall counts
 	for (int i = 0; i < MAX_SYSCALL_NUM; i++) {
-		info->syscall_times[i] = p->syscall_count[i];
+		kernelInfo.syscall_times[i] = p->syscall_count[i];
 	}
 	// getting time in ms 
 	uint64 elapsed = get_cycle() - p->start_time;
-	info->time = (int)((elapsed * 1000) / CPU_FREQ);
+	kernelInfo.time = (int)((elapsed * 1000) / CPU_FREQ);
+	// copying kernel info to user space
+	if (copyout(p->pagetable, user_info_virtual,
+            (char *)&kernelInfo, sizeof(struct TaskInfo)) < 0) 
+	{
+    return -1;
+	}
 	return 0;
+}
+
+uint64 sys_mmap(uint64 start, uint64 len, int port, int flag, int fd)
+{
+    // YOUR CODE HERE
+    // Hints from the PDF:
+    // - Use kalloc() to get physical pages
+    // - Use mappages() to create the mapping
+    // - Need to map page-by-page (kalloc doesn't give contiguous memory)
+    // - Convert port bits to PTE flags (don't forget PTE_U!)
+    return 0;
+}
+
+uint64 sys_munmap(uint64 start, uint64 len)
+{
+    // YOUR CODE HERE
+    // Hint: Use uvmunmap() function
+    return 0;
 }
 
 extern char trap_page[];
@@ -81,6 +110,9 @@ void syscall()
 	/*
 	* LAB1: you may need to update syscall counter for task info here
 	*/
+	struct proc *p = curr_proc();
+	if (id >= 0 && id < MAX_SYSCALL_NUM)
+    	p->syscall_count[id]++;
 	switch (id) {
 	case SYS_write:
 		ret = sys_write(args[0], args[1], args[2]);
@@ -92,11 +124,20 @@ void syscall()
 		ret = sys_sched_yield();
 		break;
 	case SYS_gettimeofday:
-		ret = sys_gettimeofday((TimeVal *)args[0], args[1]);
+		ret = sys_gettimeofday(args[0], args[1]);
 		break;
 	/*
 	* LAB1: you may need to add SYS_taskinfo case here
 	*/
+	case SYS_task_info:
+		ret = sys_task_info(args[0]);
+		break;
+	case SYS_mmap:
+		ret = sys_mmap(args[0], args[1], args[2], args[3], args[4]);
+		break;
+	case SYS_munmap:
+		ret = sys_munmap(args[0], args[1]);
+		break;
 	default:
 		ret = -1;
 		errorf("unknown syscall %d", id);
@@ -104,3 +145,4 @@ void syscall()
 	trapframe->a0 = ret;
 	tracef("syscall ret %d", ret);
 }
+
