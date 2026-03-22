@@ -3,8 +3,6 @@
 
 #include "riscv.h"
 #include "types.h"
-#include "stddef.h"
-#include "timer.h"
 
 #define NPROC (16)
 #define MAX_SYSCALL_NUM 500
@@ -31,13 +29,6 @@ struct context {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
-typedef enum {
-    UnInit,
-    Ready,
-    Running,
-    Exited,
-} TaskStatus;
-
 // Per-process state
 struct proc {
 	enum procstate state; // Process state
@@ -51,16 +42,24 @@ struct proc {
 	/*
 	* LAB1: you may need to add some new fields here
 	*/
-	uint64 syscall_count[MAX_SYSCALL_NUM]; 
-	uint64 start_time;
+	uint64 start_time; // time when proc ran
+    uint32 syscall_times[500]; // count for each syscall id
 };
 
 /*
 * LAB1: you may need to define struct for TaskInfo here
 */
+
+typedef enum {
+    UnInit = 0,
+    Ready = 1,
+    Running = 2,
+    Exited = 3,
+} TaskStatus;
+
 struct TaskInfo {
     TaskStatus status;
-    unsigned int syscall_times[MAX_SYSCALL_NUM];
+    uint32 syscall_times[MAX_SYSCALL_NUM];
     int time;
 };
 
