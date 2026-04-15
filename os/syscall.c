@@ -43,6 +43,7 @@ uint64 sys_gettimeofday(uint64 va, int _tz)
 	// here we translate the va ourselves to physical addr
 	// useraddr finds phys addr from the VA passed in
     TimeVal *pa = (TimeVal *)useraddr(p->pagetable, va);
+    // va invalid
     if (pa == 0)
         return -1;
     uint64 cycle = get_cycle();
@@ -107,10 +108,10 @@ uint64 sys_mmap(uint64 start, uint64 len, int port, int flag, int fd)
 
     // allocating/map phys page per virtual page
     for (a = start; a < end; a += PGSIZE) {
-        void *pa = kalloc(); // get a free phys page, and zero it out
+        void *pa = kalloc(); // get a free phys page, 
         if (pa == 0)
             return -1;
-        memset(pa, 0, PGSIZE);
+        memset(pa, 0, PGSIZE); // and zero it out
         if (mappages(p->pagetable, a, PGSIZE, (uint64)pa, perm) != 0) {
             kfree(pa); // we free the page if it mapping doesnt work 
             return -1;
