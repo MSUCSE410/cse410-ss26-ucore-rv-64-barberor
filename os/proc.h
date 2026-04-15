@@ -7,6 +7,7 @@
 
 #define NPROC (512)
 #define FD_BUFFER_SIZE (16)
+#define MAX_SYSCALL_NUM 500
 
 struct file;
 
@@ -45,6 +46,24 @@ struct proc {
 	struct proc *parent; // Parent process
 	uint64 exit_code;
 	struct file *files[FD_BUFFER_SIZE];
+	uint64 start_time;
+	uint32 syscall_times[500];
+	// PROJECT 3
+	uint64 stride;
+	long long priority;
+};
+
+typedef enum {
+    UnInit = 0,
+    Ready = 1,
+    Running = 2,
+    Exited = 3,
+} TaskStatus;
+
+struct TaskInfo {
+    TaskStatus status;
+    unsigned int syscall_times[MAX_SYSCALL_NUM];
+    int time;
 };
 
 int cpuid();
@@ -63,5 +82,6 @@ struct proc *allocproc();
 int fdalloc(struct file *);
 // swtch.S
 void swtch(struct context *, struct context *);
+void freeproc(struct proc *);
 
 #endif // PROC_H
