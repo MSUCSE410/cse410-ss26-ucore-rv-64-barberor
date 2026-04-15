@@ -114,6 +114,8 @@ struct inode *ialloc(uint dev, short type)
 		if (dip->type == 0) { // a free inode
 			memset(dip, 0, sizeof(*dip));
 			dip->type = type;
+			
+			dip->pad[0] = 1;
 			bwrite(bp);
 			brelse(bp);
 			return iget(dev, inum);
@@ -137,6 +139,7 @@ void iupdate(struct inode *ip)
 	dip->type = ip->type;
 	dip->size = ip->size;
 	// LAB4: you may need to update link count here
+	dip->pad[0] = ip->nlink;
 	memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
 	bwrite(bp);
 	brelse(bp);
@@ -190,6 +193,7 @@ void ivalid(struct inode *ip)
 		ip->type = dip->type;
 		ip->size = dip->size;
 		// LAB4: You may need to get lint count here
+		ip->nlink = dip->pad[0] == 0 ? 1 : dip->pad[0];
 		memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
 		brelse(bp);
 		ip->valid = 1;
@@ -207,15 +211,13 @@ void ivalid(struct inode *ip)
 // case it has to free the inode.
 void iput(struct inode *ip)
 {
-	// LAB4: Unmark the condition and change link count variable name (nlink) if needed
-	if (ip->ref == 1 && ip->valid && 0 /*&& ip->nlink == 0*/) {
-		// inode has no links and no other references: truncate and free.
-		itrunc(ip);
-		ip->type = 0;
-		iupdate(ip);
-		ip->valid = 0;
-	}
-	ip->ref--;
+    if (ip->ref == 1 && ip->valid && ip->nlink == 0) {
+        itrunc(ip);
+        ip->type = 0;
+        iupdate(ip);
+        ip->valid = 0;
+    }
+    ip->ref--;
 }
 
 // Inode content
@@ -429,6 +431,26 @@ int dirlink(struct inode *dp, char *name, uint inum)
 }
 
 // LAB4: You may want to add dirunlink here
+int dirunlink(struct inode *dp, char *name)
+{
+    uint off;
+    struct dirent de;
+    struct inode *ip;
+
+    if ((ip = dirlookup(dp, name, &off)) == 0)
+        return -1;
+
+    ivalid(ip);
+
+    memset(&de, 0, sizeof(de));
+    if (writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+        panic("dirunlink");
+
+    ip->nlink--;
+    iupdate(ip);
+    iput(ip);
+    return 0;
+}
 
 //Return the inode of the root directory
 struct inode *root_dir()
@@ -441,14 +463,10 @@ struct inode *root_dir()
 //Find the corresponding inode according to the path
 struct inode *namei(char *path)
 {
-	int skip = 0;
-	// if(path[0] == '.' && path[1] == '/')
-	//     skip = 2;
-	// if (path[0] == '/') {
-	//     skip = 1;
-	// }
-	struct inode *dp = root_dir();
-	if (dp == 0)
-		panic("fs dumped.\n");
-	return dirlookup(dp, path + skip, 0);
+    struct inode *dp = root_dir();
+    if (dp == 0)
+        panic("fs dumped.\n");
+    struct inode *ip = dirlookup(dp, path, 0);
+    iput(dp);
+    return ip;
 }

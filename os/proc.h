@@ -45,13 +45,46 @@ struct proc {
 	uint64 exit_code;
 	struct file *files
 		[FD_BUFFER_SIZE]; //File descriptor table, using to record the files opened by the process
+	uint64 start_time;
+	uint32 syscall_times[500];
+	uint64 stride;
+	long long priority;
 };
+
+#define MAX_SYSCALL_NUM 500
+
+typedef enum {
+    UnInit = 0,
+    Ready = 1,
+    Running = 2,
+    Exited = 3,
+} TaskStatus;
+
+struct TaskInfo {
+    TaskStatus status;
+    unsigned int syscall_times[MAX_SYSCALL_NUM];
+    int time;
+};
+
+#define STAT_DIR  0x040000
+#define STAT_FILE 0x100000
+
+typedef struct {
+    uint64 dev;
+    uint64 ino;
+    uint32 mode;
+    uint32 nlink;
+    uint64 pad[7];
+} Stat;
+
+
 
 int cpuid();
 struct proc *curr_proc();
 void exit(int);
 void proc_init();
 void scheduler() __attribute__((noreturn));
+void freeproc(struct proc *);
 void sched();
 void yield();
 int fork();
