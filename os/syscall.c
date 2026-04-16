@@ -291,7 +291,7 @@ int deadlock_detect(const int available[LOCK_POOL_SIZE],
             }
         }
     }
-	// any thread still unfinished means it's stuck — deadlock
+	// any thread still unfinished means it's stuck :deadlock
     for (int t = 0; t < NTHREAD; t++)
         if (!finish[t]) return -1; // deadlock detected
     return 0;
