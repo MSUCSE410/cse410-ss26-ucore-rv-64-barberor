@@ -208,51 +208,73 @@ uint64 sys_spawn(uint64 va)
 {
     struct proc *p = curr_proc();
     char name[200];
+	// executable name copied
     copyinstr(p->pagetable, name, va, 200);
     struct inode *ip = namei(name);
     if (ip == 0) return -1;
     struct proc *np = allocproc();
     if (np == 0) { iput(ip); return -1; }
+	// loading inode then load binary
     ivalid(ip);
     bin_loader(ip, np);
     iput(ip);
+	    // set parent and mark ready to run
     np->parent = p;
     np->state = RUNNABLE;
     return np->pid;
 }
 
+// fills in the Stat struct with data about an open file
+// device, inode num, type (file or dir), link cnt
 int sys_fstat(int fd, uint64 stat)
 {
     if (fd < 0 || fd >= FD_BUFFER_SIZE) return -1;
     struct proc *p = curr_proc();
     struct file *f = p->files[fd];
     if (f == 0) return -1;
+	// translate user virtual address to kernel address for the stat struct
     Stat *st = (Stat *)useraddr(p->pagetable, stat);
     if (st == 0) return -1;
     ivalid(f->ip);
+	// now we are working on the STat struct
+	// so fill in the stat struct with inode info
     st->dev = f->ip->dev;
     st->ino = f->ip->inum;
+	// set mode based on whether this is a file or directory
     st->mode = (f->ip->type == T_DIR) ? STAT_DIR : STAT_FILE;
     st->nlink = f->ip->nlink;
     return 0;
 }
 
+// makes a new link ->a new directory entry pointing to an existing inode
+// increments nlink on inode as well
 int sys_linkat(int olddirfd, uint64 oldpath, int newdirfd, uint64 newpath, uint64 flags)
 {
     struct proc *p = curr_proc();
     char old[200], new[200];
+	// copy both paths from userspace
     copyinstr(p->pagetable, old, oldpath, 200);
     copyinstr(p->pagetable, new, newpath, 200);
-    if (strncmp(old, new, 200) == 0) return -1;
+	// making sure old != news
+    if (strncmp(old, new, 200) == 0) 
+		return -1;
+	// find the existing inode
     struct inode *ip = namei(old);
-    if (ip == 0) return -1;
+    if (ip == 0) 
+		return -1;
     ivalid(ip);
-    if (ip->type == T_DIR) { iput(ip); return -1; }
+    if (ip->type == T_DIR) { 
+		iput(ip); 
+		return -1; 
+	}
+	    // get root directory and add new -
+		// directory entry pointing to same inode
     struct inode *dp = root_dir();
     ivalid(dp);
     if (dirlink(dp, new, ip->inum) < 0) {
         iput(dp); iput(ip); return -1;
     }
+	 // increment link count and write back to disk
     ip->nlink++;
     iupdate(ip);
     iput(ip);
@@ -260,12 +282,18 @@ int sys_linkat(int olddirfd, uint64 oldpath, int newdirfd, uint64 newpath, uint6
     return 0;
 }
 
+// removes dir entry and decrement nlink on inode
+// if 0 then it inode is freed
 int sys_unlinkat(int dirfd, uint64 name, uint64 flags)
 {
     struct proc *p = curr_proc();
     char path[200];
+	// copy path from userspace
     copyinstr(p->pagetable, path, name, 200);
+	 // get root directory and remove the entry
     struct inode *dp = root_dir();
+	// dirunlink decrements nlink
+	// will free inode if = 0
     ivalid(dp);
     if (dirunlink(dp, path) < 0) {
         iput(dp); return -1;

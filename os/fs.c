@@ -114,7 +114,7 @@ struct inode *ialloc(uint dev, short type)
 		if (dip->type == 0) { // a free inode
 			memset(dip, 0, sizeof(*dip));
 			dip->type = type;
-			
+			// initialize nlink to 1 (one directory)
 			dip->pad[0] = 1;
 			bwrite(bp);
 			brelse(bp);
@@ -139,6 +139,7 @@ void iupdate(struct inode *ip)
 	dip->type = ip->type;
 	dip->size = ip->size;
 	// LAB4: you may need to update link count here
+	// save nlink to disk 
 	dip->pad[0] = ip->nlink;
 	memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
 	bwrite(bp);
@@ -193,6 +194,8 @@ void ivalid(struct inode *ip)
 		ip->type = dip->type;
 		ip->size = dip->size;
 		// LAB4: You may need to get lint count here
+		// load nlink from disk
+		// 1 if not set since all valid inode have >= 1 link
 		ip->nlink = dip->pad[0] == 0 ? 1 : dip->pad[0];
 		memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
 		brelse(bp);
@@ -211,6 +214,9 @@ void ivalid(struct inode *ip)
 // case it has to free the inode.
 void iput(struct inode *ip)
 {
+	// if this is the last reference and no dir entries point to it,
+    // free the inode and mark it free on disk
+	// (explained in header too)
     if (ip->ref == 1 && ip->valid && ip->nlink == 0) {
         itrunc(ip);
         ip->type = 0;
@@ -431,21 +437,28 @@ int dirlink(struct inode *dp, char *name, uint inum)
 }
 
 // LAB4: You may want to add dirunlink here
+
+// removes a dir entry by name without freeing inode
+//also decrements nlink
 int dirunlink(struct inode *dp, char *name)
 {
     uint off;
     struct dirent de;
     struct inode *ip;
 
+	// find the directory entry-> returns inode and offset of entry
     if ((ip = dirlookup(dp, name, &off)) == 0)
         return -1;
 
     ivalid(ip);
 
+	// zero out dir entry and remove it
     memset(&de, 0, sizeof(de));
     if (writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
         panic("dirunlink");
 
+	// decrement link count and write inode back to disk
+	// if nlink 0 it will free
     ip->nlink--;
     iupdate(ip);
     iput(ip);
@@ -467,6 +480,7 @@ struct inode *namei(char *path)
     if (dp == 0)
         panic("fs dumped.\n");
     struct inode *ip = dirlookup(dp, path, 0);
+	// release the dir inode reference so no leak 
     iput(dp);
     return ip;
 }
