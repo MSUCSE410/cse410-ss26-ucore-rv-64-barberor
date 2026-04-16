@@ -198,6 +198,7 @@ uint64 sys_spawn(uint64 va)
 {
     struct proc *p = curr_proc();
     char name[200];
+	// get executable name
     copyinstr(p->pagetable, name, va, 200);
 
     // new process, load the program into it
@@ -205,18 +206,20 @@ uint64 sys_spawn(uint64 va)
     if (np == 0)
         return -1;
 
+	// look up the program by name
     int id = get_id_by_name(name);
     if (id < 0) {
         freeproc(np);
         return -1;
     }
 
+	// load the binary into the new process's address space
     if (loader(id, np) < 0) {
         freeproc(np);
         return -1;
     }
 
-    // set parent mark runnable and return child pid
+    // set parent & mark runnable and return child pid
     np->parent = p;
     np->state = RUNNABLE;
     return np->pid;
